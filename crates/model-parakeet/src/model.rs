@@ -47,17 +47,15 @@ struct SentencePieceTokenizer {
 impl SentencePieceTokenizer {
     /// Загрузить токенизатор из vocab.json.
     fn from_vocab_json(path: &Path) -> AsrResult<Self> {
-        let data = std::fs::read_to_string(path).map_err(|e| {
-            AsrError::Model(format!("Не удалось прочитать vocab.json: {e}"))
-        })?;
-        let map: serde_json::Value = serde_json::from_str(&data).map_err(|e| {
-            AsrError::Model(format!("Не удалось распарсить vocab.json: {e}"))
-        })?;
+        let data = std::fs::read_to_string(path)
+            .map_err(|e| AsrError::Model(format!("Не удалось прочитать vocab.json: {e}")))?;
+        let map: serde_json::Value = serde_json::from_str(&data)
+            .map_err(|e| AsrError::Model(format!("Не удалось распарсить vocab.json: {e}")))?;
 
         // vocab.json: { "piece": {"id": N, "score": F}, ... }
-        let obj = map.as_object().ok_or_else(|| {
-            AsrError::Model("vocab.json должен быть JSON-объектом".into())
-        })?;
+        let obj = map
+            .as_object()
+            .ok_or_else(|| AsrError::Model("vocab.json должен быть JSON-объектом".into()))?;
 
         let mut vocab = vec![String::new(); obj.len()];
         for (piece, info) in obj {
@@ -105,9 +103,8 @@ impl ParakeetModel {
         let config_path = model_dir.join("config.json");
         let config: ParakeetConfig = if config_path.exists() {
             let data = std::fs::read_to_string(&config_path)?;
-            serde_json::from_str(&data).map_err(|e| {
-                AsrError::Config(format!("Ошибка парсинга config.json: {e}"))
-            })?
+            serde_json::from_str(&data)
+                .map_err(|e| AsrError::Config(format!("Ошибка парсинга config.json: {e}")))?
         } else {
             warn!("config.json не найден, используем дефолтные значения");
             ParakeetConfig::default_v3()
@@ -129,14 +126,20 @@ impl ParakeetModel {
             DType::F32
         };
 
-        let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[&safetensors_path], dtype, device)?
-        };
+        let vb =
+            unsafe { VarBuilder::from_mmaped_safetensors(&[&safetensors_path], dtype, device)? };
 
         // 3. Mel-экстрактор: загружаем фильтры из весов если доступны
         let mel_extractor = {
             let pp_vb = vb.pp("preprocessor").pp("featurizer");
-            let mel_fb = pp_vb.get((1, config.preprocessor.features, config.preprocessor.n_fft / 2 + 1), "fb");
+            let mel_fb = pp_vb.get(
+                (
+                    1,
+                    config.preprocessor.features,
+                    config.preprocessor.n_fft / 2 + 1,
+                ),
+                "fb",
+            );
             let window = pp_vb.get(config.win_length(), "window");
 
             match (mel_fb, window) {
@@ -157,15 +160,24 @@ impl ParakeetModel {
 
         // 4. Encoder
         let encoder = FastConformerEncoder::load(&config.encoder, vb.pp("encoder"))?;
-        info!("FastConformer encoder загружен: {} слоёв", config.encoder.n_layers);
+        info!(
+            "FastConformer encoder загружен: {} слоёв",
+            config.encoder.n_layers
+        );
 
         // 5. Decoder (prediction network)
         let prediction_net = PredictionNet::load(&config.decoder, vb.pp("decoder"))?;
-        info!("Prediction network загружен: LSTM {}×{}", config.decoder.num_lstm_layers, config.decoder.pred_hidden);
+        info!(
+            "Prediction network загружен: LSTM {}×{}",
+            config.decoder.num_lstm_layers, config.decoder.pred_hidden
+        );
 
         // 6. Joint network
         let joint = JointNetwork::load(&config.joint, vb.pp("joint"))?;
-        info!("Joint network загружен: output_dim={}", config.joint.output_dim);
+        info!(
+            "Joint network загружен: output_dim={}",
+            config.joint.output_dim
+        );
 
         // 7. TDT decoder
         let tdt_decoder = TdtGreedyDecoder::new(&config.tdt, config.decoder.blank_idx);
@@ -221,11 +233,9 @@ impl ParakeetModel {
         let encoder_output = encoder_output.squeeze(0)?;
 
         // 4. TDT greedy decode
-        let result = self.tdt_decoder.decode(
-            &encoder_output,
-            &self.prediction_net,
-            &self.joint,
-        )?;
+        let result = self
+            .tdt_decoder
+            .decode(&encoder_output, &self.prediction_net, &self.joint)?;
 
         // 5. Detokenize
         let text = self.tokenizer.decode(&result.tokens);
@@ -251,9 +261,8 @@ impl AsrModel for ParakeetModel {
     fn supported_languages(&self) -> &[&str] {
         // Parakeet-TDT v3: 25 европейских языков
         &[
-            "en", "de", "es", "fr", "it", "pt", "nl", "pl", "ro", "hu", "cs",
-            "sk", "bg", "hr", "sl", "uk", "ru", "sv", "da", "fi", "nb", "el",
-            "ca", "eu", "gl",
+            "en", "de", "es", "fr", "it", "pt", "nl", "pl", "ro", "hu", "cs", "sk", "bg", "hr",
+            "sl", "uk", "ru", "sv", "da", "fi", "nb", "el", "ca", "eu", "gl",
         ]
     }
 

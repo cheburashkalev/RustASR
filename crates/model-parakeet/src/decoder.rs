@@ -11,7 +11,7 @@
 //! - decoder.prediction.dec_rnn.lstm.bias_ih_l{i}: [4*hidden]
 //! - decoder.prediction.dec_rnn.lstm.bias_hh_l{i}: [4*hidden]
 
-use candle_core::{DType, Device, Module, Result, Tensor, D};
+use candle_core::{D, DType, Device, Module, Result, Tensor};
 use candle_nn::VarBuilder;
 use tracing::debug;
 
@@ -33,7 +33,12 @@ struct LstmLayer {
 }
 
 impl LstmLayer {
-    fn load(input_size: usize, hidden_size: usize, layer_idx: usize, vb: VarBuilder) -> Result<Self> {
+    fn load(
+        input_size: usize,
+        hidden_size: usize,
+        layer_idx: usize,
+        vb: VarBuilder,
+    ) -> Result<Self> {
         let gate_size = 4 * hidden_size;
         let weight_ih = vb.get((gate_size, input_size), &format!("weight_ih_l{layer_idx}"))?;
         let weight_hh = vb.get((gate_size, hidden_size), &format!("weight_hh_l{layer_idx}"))?;
@@ -51,8 +56,16 @@ impl LstmLayer {
     /// Forward одного шага: (x [hidden], h [hidden], c [hidden]) → (h_new, c_new).
     fn step(&self, x: &Tensor, h: &Tensor, c: &Tensor) -> Result<(Tensor, Tensor)> {
         // Добавляем batch dim для matmul: [hidden] → [1, hidden]
-        let x_2d = if x.dims().len() == 1 { x.unsqueeze(0)? } else { x.clone() };
-        let h_2d = if h.dims().len() == 1 { h.unsqueeze(0)? } else { h.clone() };
+        let x_2d = if x.dims().len() == 1 {
+            x.unsqueeze(0)?
+        } else {
+            x.clone()
+        };
+        let h_2d = if h.dims().len() == 1 {
+            h.unsqueeze(0)?
+        } else {
+            h.clone()
+        };
 
         // gates = x @ W_ih^T + h @ W_hh^T + b_ih + b_hh
         let gates = x_2d
@@ -132,7 +145,11 @@ impl PredictionNet {
         let lstm_vb = pred_vb.pp("dec_rnn").pp("lstm");
         let mut lstm_layers = Vec::with_capacity(config.num_lstm_layers);
         for i in 0..config.num_lstm_layers {
-            let input_size = if i == 0 { config.embed_dim } else { config.pred_hidden };
+            let input_size = if i == 0 {
+                config.embed_dim
+            } else {
+                config.pred_hidden
+            };
             let layer = LstmLayer::load(input_size, config.pred_hidden, i, lstm_vb.clone())?;
             lstm_layers.push(layer);
         }
@@ -183,10 +200,7 @@ impl PredictionNet {
             new_c.push(c_new);
         }
 
-        let new_state = LstmState {
-            h: new_h,
-            c: new_c,
-        };
+        let new_state = LstmState { h: new_h, c: new_c };
 
         Ok((x, new_state))
     }

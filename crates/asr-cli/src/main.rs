@@ -338,24 +338,34 @@ fn main() -> Result<()> {
             match model_type {
                 ModelTypeArg::Whisper => {
                     run_transcribe_whisper(
-                        &model, &resampled.samples, &device, language.as_deref(),
-                        max_tokens, out_text, start, &decoder_weights,
+                        &model,
+                        &resampled.samples,
+                        &device,
+                        language.as_deref(),
+                        max_tokens,
+                        out_text,
+                        start,
+                        &decoder_weights,
                     )?;
                 }
                 ModelTypeArg::Gigaam => {
-                    run_transcribe_gigaam(
-                        &model, &resampled.samples, &device, out_text, start,
-                    )?;
+                    run_transcribe_gigaam(&model, &resampled.samples, &device, out_text, start)?;
                 }
                 ModelTypeArg::Parakeet => {
-                    run_transcribe_parakeet(
-                        &model, &resampled.samples, &device, out_text, start,
-                    )?;
+                    run_transcribe_parakeet(&model, &resampled.samples, &device, out_text, start)?;
                 }
                 ModelTypeArg::Qwen3 => {
                     run_transcribe_qwen3(
-                        &model, &resampled.samples, &device, language.as_deref(),
-                        max_tokens, raw, decoder_weights, decoder_gguf, out_text, start,
+                        &model,
+                        &resampled.samples,
+                        &device,
+                        language.as_deref(),
+                        max_tokens,
+                        raw,
+                        decoder_weights,
+                        decoder_gguf,
+                        out_text,
+                        start,
                     )?;
                 }
             }
@@ -472,19 +482,14 @@ fn run_transcribe_whisper(
     decoder_weights: &DecoderWeightsArg,
 ) -> Result<()> {
     let quantized = matches!(decoder_weights, DecoderWeightsArg::Gguf);
-    println!("🧠 Loading Whisper model{}...", if quantized { " (GGUF quantized)" } else { "" });
+    println!(
+        "🧠 Loading Whisper model{}...",
+        if quantized { " (GGUF quantized)" } else { "" }
+    );
     let mut engine = if quantized {
-        asr_engine::AsrEngine::load_quantized(
-            asr_core::ModelType::Whisper,
-            model_dir,
-            device,
-        )?
+        asr_engine::AsrEngine::load_quantized(asr_core::ModelType::Whisper, model_dir, device)?
     } else {
-        asr_engine::AsrEngine::load(
-            asr_core::ModelType::Whisper,
-            model_dir,
-            device,
-        )?
+        asr_engine::AsrEngine::load(asr_core::ModelType::Whisper, model_dir, device)?
     };
     let info = engine.model_info();
     println!("   Model: {}", engine.name());
@@ -536,7 +541,10 @@ fn run_transcribe_whisper(
         println!();
         println!("📊 Segments:");
         for seg in &result.segments {
-            let conf = seg.confidence.map(|c| format!(" ({:.0}%)", c * 100.0)).unwrap_or_default();
+            let conf = seg
+                .confidence
+                .map(|c| format!(" ({:.0}%)", c * 100.0))
+                .unwrap_or_default();
             println!(
                 "   [{:.1}s - {:.1}s]{} {}",
                 seg.start, seg.end, conf, seg.text
@@ -569,11 +577,7 @@ fn run_transcribe_gigaam(
     start: Instant,
 ) -> Result<()> {
     println!("🧠 Загрузка модели GigaAM...");
-    let mut engine = asr_engine::AsrEngine::load(
-        asr_core::ModelType::GigaAm,
-        model_dir,
-        device,
-    )?;
+    let mut engine = asr_engine::AsrEngine::load(asr_core::ModelType::GigaAm, model_dir, device)?;
     let info = engine.model_info();
     println!("   Модель: {}", engine.name());
     println!(
@@ -637,10 +641,7 @@ fn run_transcribe_gigaam(
         transcribe_time.as_secs_f32(),
         result.rtf,
     );
-    println!(
-        "⏱️  Общее время: {:.2}s",
-        start.elapsed().as_secs_f32()
-    );
+    println!("⏱️  Общее время: {:.2}s", start.elapsed().as_secs_f32());
 
     Ok(())
 }
@@ -657,11 +658,7 @@ fn run_transcribe_parakeet(
     start: Instant,
 ) -> Result<()> {
     println!("🧠 Загрузка модели Parakeet TDT...");
-    let mut engine = asr_engine::AsrEngine::load(
-        asr_core::ModelType::Parakeet,
-        model_dir,
-        device,
-    )?;
+    let mut engine = asr_engine::AsrEngine::load(asr_core::ModelType::Parakeet, model_dir, device)?;
     let info = engine.model_info();
     println!("   Модель: {}", engine.name());
     println!(
@@ -724,10 +721,7 @@ fn run_transcribe_parakeet(
         transcribe_time.as_secs_f32(),
         result.rtf,
     );
-    println!(
-        "⏱️  Общее время: {:.2}s",
-        start.elapsed().as_secs_f32()
-    );
+    println!("⏱️  Общее время: {:.2}s", start.elapsed().as_secs_f32());
 
     Ok(())
 }
@@ -766,11 +760,8 @@ fn run_transcribe_qwen3(
     let duration_sec = samples.len() as f32 / 16000.0;
     let max_tokens = max_tokens.unwrap_or_else(|| estimate_max_tokens(duration_sec));
 
-    let result = pipeline.transcribe_to_result_with_max_tokens_and_language(
-        samples,
-        max_tokens,
-        language,
-    )?;
+    let result = pipeline
+        .transcribe_to_result_with_max_tokens_and_language(samples, max_tokens, language)?;
 
     let transcribe_time = transcribe_start.elapsed();
 
@@ -812,9 +803,7 @@ fn run_transcribe_qwen3(
         }
         asr_pipeline::StopReason::Repetition => {
             println!();
-            println!(
-                "   [!] Обнаружено зацикливание. Остановлено эвристикой.",
-            );
+            println!("   [!] Обнаружено зацикливание. Остановлено эвристикой.",);
             println!(
                 "       Рекомендация: используйте VAD (`rustasr diarize`) \
                  или повысите качество квантования (Q6K/Q8)."
@@ -1131,6 +1120,7 @@ fn extract_channel(buf: &asr_core::AudioBuffer, idx: usize) -> Result<asr_core::
     Ok(asr_core::AudioBuffer::new(out, buf.sample_rate, 1))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_diarize(
     model: PathBuf,
     model_type: ModelTypeArg,
@@ -1180,7 +1170,7 @@ fn run_diarize(
 
     /// Абстракция транскрибатора: Qwen3 (AsrPipeline) или любая другая модель (AsrEngine).
     enum Transcriber {
-        Qwen3(asr_pipeline::AsrPipeline),
+        Qwen3(Box<asr_pipeline::AsrPipeline>),
         Engine(asr_engine::AsrEngine),
     }
 
@@ -1201,11 +1191,8 @@ fn run_diarize(
             match self {
                 Transcriber::Qwen3(pipeline) => {
                     let mt = max_tokens.unwrap_or_else(|| estimate_max_tokens_for_segment(dur_s));
-                    let r = pipeline.transcribe_to_result_with_max_tokens_and_language(
-                        samples,
-                        mt,
-                        language,
-                    )?;
+                    let r = pipeline
+                        .transcribe_to_result_with_max_tokens_and_language(samples, mt, language)?;
                     let stop = match r.stop_reason {
                         asr_pipeline::StopReason::Eos => "eos",
                         asr_pipeline::StopReason::MaxTokens => "max_tokens",
@@ -1249,7 +1236,7 @@ fn run_diarize(
                 decoder_weights.into(),
                 decoder_gguf.clone(),
             )?;
-            Transcriber::Qwen3(pipeline)
+            Transcriber::Qwen3(Box::new(pipeline))
         }
         _ => {
             let quantized = matches!(decoder_weights, DecoderWeightsArg::Gguf);
@@ -1404,7 +1391,7 @@ fn run_diarize(
         SpeakerModeArg::Cluster | SpeakerModeArg::Auto => {
             // В cluster-режиме у нас всегда 1 "канал" (mono).
             let samples = chan_samples
-                .get(0)
+                .first()
                 .context("internal error: chan_samples is empty")?;
             let speech = vad::split_mono_by_vad(samples.as_slice(), TARGET_SR, &vad_cfg)
                 .context("VAD failed for mono audio")?;
@@ -1453,7 +1440,7 @@ fn run_diarize(
                 }
             } else {
                 let label = speaker_names
-                    .get(0)
+                    .first()
                     .cloned()
                     .unwrap_or_else(|| "spk0".to_string());
                 for seg in &mut segments {
@@ -1605,12 +1592,7 @@ fn run_diarize(
                     .map(|s| s.as_str())
             })
             .or(language.as_deref());
-        let r = transcriber.transcribe_segment(
-            seg_samples,
-            max_tokens,
-            forced_lang,
-            dur_s,
-        )?;
+        let r = transcriber.transcribe_segment(seg_samples, max_tokens, forced_lang, dur_s)?;
 
         let ts0 = vad::format_hhmmss_millis(start_s);
         let ts1 = vad::format_hhmmss_millis(end_s);

@@ -49,7 +49,7 @@ fn round_up_div(a: usize, b: usize) -> usize {
     if b == 0 {
         return 0;
     }
-    (a + b - 1) / b
+    a.div_ceil(b)
 }
 
 fn sample_rate_to_webrtc(sample_rate: usize) -> Result<SampleRate> {

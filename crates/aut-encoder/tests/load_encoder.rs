@@ -85,7 +85,7 @@ fn test_load_encoder_from_safetensors() {
                     // Для кратностей 100 это даёт 13 токенов на 100 mel-фреймов.
                     fn hf_aftercnn_len(input_len: usize) -> usize {
                         let input_len = input_len as i64;
-                        let leave = (input_len % 100) as i64;
+                        let leave = input_len % 100;
                         let feat = (leave - 1).div_euclid(2) + 1;
                         let out = (((feat - 1).div_euclid(2) + 1 - 1).div_euclid(2) + 1)
                             + (input_len / 100) * 13;

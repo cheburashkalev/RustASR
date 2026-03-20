@@ -153,9 +153,9 @@ fn byte_level_decode(s: &str, byte_decoder: &HashMap<char, u8>) -> String {
 fn gpt2_byte_decoder() -> HashMap<char, u8> {
     // Портировано из GPT-2 encoder.py (byte_to_unicode).
     let mut bs: Vec<u32> = Vec::new();
-    bs.extend((b'!' as u32)..=(b'~' as u32));
-    bs.extend((0x00A1_u32)..=(0x00AC_u32));
-    bs.extend((0x00AE_u32)..=(0x00FF_u32));
+    bs.extend(b'!' as u32..=b'~' as u32);
+    bs.extend(0x00A1_u32..=0x00AC_u32);
+    bs.extend(0x00AE_u32..=0x00FF_u32);
 
     let mut cs = bs.clone();
     let mut n = 0u32;

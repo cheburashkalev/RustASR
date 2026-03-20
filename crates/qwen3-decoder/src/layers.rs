@@ -239,7 +239,7 @@ impl Attention {
         &self,
         x: &Tensor,
         start_pos: usize,
-        mut cache: Option<&mut crate::cache::LayerKvCache>,
+        cache: Option<&mut crate::cache::LayerKvCache>,
     ) -> Result<Tensor> {
         let debug = asr_core::debug::enabled();
         let (batch_size, seq_len, _) = x.dims3()?;
@@ -276,7 +276,7 @@ impl Attention {
         }
 
         // KV-cache: если передан, обновляем и используем накопленные K/V.
-        let (k, v, use_causal_mask) = if let Some(layer_cache) = cache.as_deref_mut() {
+        let (k, v, use_causal_mask) = if let Some(layer_cache) = cache {
             if layer_cache.k.is_none() {
                 // Префилл (кеш пустой). Сохраняем K/V всего префикса.
                 layer_cache.k = Some(k.clone());

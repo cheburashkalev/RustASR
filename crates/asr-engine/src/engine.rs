@@ -8,9 +8,7 @@ use std::path::Path;
 use candle_core::Device;
 use tracing::info;
 
-use asr_core::{
-    AsrModel, AsrResult, ModelInfo, ModelType, TranscribeOptions, TranscriptionResult,
-};
+use asr_core::{AsrModel, AsrResult, ModelInfo, ModelType, TranscribeOptions, TranscriptionResult};
 
 /// Единый движок ASR, абстрагирующий конкретную модель.
 ///
@@ -64,7 +62,9 @@ impl AsrEngine {
             #[cfg(feature = "whisper")]
             ModelType::Whisper => {
                 if quantized {
-                    Box::new(model_whisper::WhisperModel::load_quantized(model_dir, device)?)
+                    Box::new(model_whisper::WhisperModel::load_quantized(
+                        model_dir, device,
+                    )?)
                 } else {
                     Box::new(model_whisper::WhisperModel::load(model_dir, device)?)
                 }
@@ -120,7 +120,9 @@ impl AsrEngine {
             #[cfg(feature = "qwen3")]
             ModelType::Qwen3Asr => {
                 if quantized {
-                    Box::new(model_qwen3::Qwen3AsrModel::load_quantized(model_dir, device)?)
+                    Box::new(model_qwen3::Qwen3AsrModel::load_quantized(
+                        model_dir, device,
+                    )?)
                 } else {
                     Box::new(model_qwen3::Qwen3AsrModel::load(model_dir, device)?)
                 }
@@ -190,6 +192,7 @@ impl AsrEngine {
     }
 
     /// Список скомпилированных моделей.
+    #[allow(clippy::vec_init_then_push)] // #[cfg(feature)] не позволяет использовать vec![]
     pub fn available_models() -> Vec<ModelType> {
         let mut models = Vec::new();
 

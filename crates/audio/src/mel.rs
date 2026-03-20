@@ -5,7 +5,9 @@
 //! - **GigaAM**: 64 mel bins, Slaney, ln, per-utterance
 //! - **Parakeet**: 80 mel bins, HTK, ln, per-utterance
 
-use asr_core::{AsrResult, FeatureExtractorConfig, LogType, MelNormalization, MelScale, MelSpectrum};
+use asr_core::{
+    AsrResult, FeatureExtractorConfig, LogType, MelNormalization, MelScale, MelSpectrum,
+};
 use candle_core::{Device, Tensor};
 use rustfft::{FftPlanner, num_complex::Complex};
 use std::f32::consts::PI;
@@ -19,6 +21,11 @@ pub struct MelSpectrogramExtractor {
 }
 
 impl MelSpectrogramExtractor {
+    /// Количество mel-бинов из конфигурации экстрактора.
+    pub fn n_mels(&self) -> usize {
+        self.config.n_mels
+    }
+
     /// Создать mel-экстрактор с фильтрами, сгенерированными по конфигурации.
     ///
     /// Автоматически выбирает Slaney или HTK шкалу в зависимости от `config.mel_scale`.
@@ -133,19 +140,14 @@ impl MelSpectrogramExtractor {
             let n = samples.len() as isize;
             let mut buffer: Vec<Complex<f32>> = (0..n_fft)
                 .map(|i| {
-                    let mut idx = start + i as isize;
+                    let idx = start + i as isize;
                     // torch.stft(center=True) по умолчанию использует pad_mode="reflect".
-                    // Соответственно, значения за границами сигнала берутся отражением.
-                    if idx < 0 {
-                        idx = -idx;
-                    }
-                    if idx >= n {
-                        idx = 2 * n - idx - 2;
-                    }
-                    let sample = if idx >= 0 && idx < n {
-                        samples[idx as usize] * self.window[i]
+                    // Reflect padding: отражаем индекс от границ [0, n-1].
+                    let reflected = reflect_index(idx, n);
+                    let sample = if reflected >= 0 && reflected < n {
+                        samples[reflected as usize] * self.window[i]
                     } else {
-                        // На сверх-краях (теоретически) безопасно падать в 0.
+                        // Защита от некорректных индексов (не должно происходить).
                         0.0
                     };
                     Complex::new(sample, 0.0)
@@ -206,13 +208,10 @@ impl MelSpectrogramExtractor {
             .collect();
 
         // Whisper: отбрасываем последний фрейм (совместимость с HF)
-        match self.config.normalization {
-            MelNormalization::WhisperDynamicRange => {
-                if !log_spec.is_empty() {
-                    log_spec.pop();
-                }
-            }
-            _ => {}
+        if self.config.normalization == MelNormalization::WhisperDynamicRange
+            && !log_spec.is_empty()
+        {
+            log_spec.pop();
         }
 
         // Step 2: Нормализация
@@ -220,20 +219,20 @@ impl MelSpectrogramExtractor {
             MelNormalization::WhisperDynamicRange => {
                 // Whisper: dynamic range compression
                 let global_max = log_spec
-            .iter()
-            .flat_map(|frame| frame.iter())
-            .cloned()
-            .fold(f32::NEG_INFINITY, f32::max);
+                    .iter()
+                    .flat_map(|frame| frame.iter())
+                    .cloned()
+                    .fold(f32::NEG_INFINITY, f32::max);
 
-        let min_val = global_max - 8.0;
+                let min_val = global_max - 8.0;
 
-        // Step 3: Apply clamping and normalization
-        for frame in log_spec.iter_mut() {
-            for val in frame.iter_mut() {
-                *val = (*val).max(min_val);
-                *val = (*val + 4.0) / 4.0;
-            }
-        }
+                // Step 3: Apply clamping and normalization
+                for frame in log_spec.iter_mut() {
+                    for val in frame.iter_mut() {
+                        *val = (*val).max(min_val);
+                        *val = (*val + 4.0) / 4.0;
+                    }
+                }
             }
             MelNormalization::PerUtterance => {
                 // Per-utterance: μ/σ нормализация (GigaAM, Parakeet)
@@ -276,6 +275,27 @@ impl Default for MelSpectrogramExtractor {
     fn default() -> Self {
         Self::new(FeatureExtractorConfig::default())
     }
+}
+
+/// Отражение индекса для reflect padding (аналог `torch.stft(..., pad_mode="reflect")`).
+///
+/// Гарантирует, что результат лежит в диапазоне `[0, n)`.
+/// Для индексов за пределами `[0, n)` выполняется многократное отражение.
+fn reflect_index(idx: isize, n: isize) -> isize {
+    if n <= 1 {
+        return 0;
+    }
+    let period = 2 * (n - 1);
+    // Нормализуем idx в [0, period)
+    let mut r = idx % period;
+    if r < 0 {
+        r += period;
+    }
+    // Отражаем, если в правой половине периода
+    if r >= n {
+        r = 2 * (n - 1) - r;
+    }
+    r
 }
 
 /// Create Hann window (periodic for STFT).
@@ -381,16 +401,16 @@ fn create_mel_filterbank_inner(
         .map(|i| i as f32 * sample_rate / n_fft as f32)
         .collect();
 
-    // Create mel points
-    let mel_min = hz_to_mel_slaney(f_min);
-    let mel_max = hz_to_mel_slaney(f_max);
+    // Создание mel-точек с использованием переданной шкалы
+    let mel_min = hz_to_mel(f_min);
+    let mel_max = hz_to_mel(f_max);
 
     let mel_points: Vec<f32> = (0..=n_mels + 1)
         .map(|i| mel_min + i as f32 * (mel_max - mel_min) / (n_mels + 1) as f32)
         .collect();
 
-    // Convert mel points to Hz
-    let hz_points: Vec<f32> = mel_points.iter().map(|&m| mel_to_hz_slaney(m)).collect();
+    // Конвертация mel-точек в Hz
+    let hz_points: Vec<f32> = mel_points.iter().map(|&m| mel_to_hz(m)).collect();
 
     // Create filterbank with Slaney normalization
     let mut filterbank = vec![vec![0.0_f32; n_freqs]; n_mels];

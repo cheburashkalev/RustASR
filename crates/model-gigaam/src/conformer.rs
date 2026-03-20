@@ -54,7 +54,12 @@ fn create_rope_table(dim: usize, max_len: usize, device: &Device) -> Result<(Ten
 ///
 /// q, k: (seq_len, batch, n_heads, d_k)
 /// cos, sin: (seq_len, 1, 1, d_k) — обрезанные до seq_len
-fn apply_rotary_pos_emb(q: &Tensor, k: &Tensor, cos: &Tensor, sin: &Tensor) -> Result<(Tensor, Tensor)> {
+fn apply_rotary_pos_emb(
+    q: &Tensor,
+    k: &Tensor,
+    cos: &Tensor,
+    sin: &Tensor,
+) -> Result<(Tensor, Tensor)> {
     let q_rot = rotate_half(q)?;
     let k_rot = rotate_half(k)?;
 
@@ -112,7 +117,13 @@ impl StridingSubsampling {
         for i in 0..n_layers {
             // Ключи: conv.0, conv.2 (рядом с ReLU на позициях 1, 3)
             let layer_idx = i * 2;
-            let conv = candle_nn::conv1d(in_ch, d_model, kernel_size, cfg, vb.pp(format!("conv.{layer_idx}")))?;
+            let conv = candle_nn::conv1d(
+                in_ch,
+                d_model,
+                kernel_size,
+                cfg,
+                vb.pp(format!("conv.{layer_idx}")),
+            )?;
             convs.push(conv);
             in_ch = d_model;
         }
@@ -167,7 +178,14 @@ impl RotaryMHSA {
         let linear_v = candle_nn::linear(d_model, d_model, vb.pp("linear_v"))?;
         let linear_out = candle_nn::linear(d_model, d_model, vb.pp("linear_out"))?;
 
-        Ok(Self { linear_q, linear_k, linear_v, linear_out, n_heads, d_k })
+        Ok(Self {
+            linear_q,
+            linear_k,
+            linear_v,
+            linear_out,
+            n_heads,
+            d_k,
+        })
     }
 
     /// Прямой проход MHSA с RoPE.
@@ -190,7 +208,7 @@ impl RotaryMHSA {
         //    GigaAM применяет RoPE ДО линейных проекций Q/K.
         //    x: (batch, seq, d_model) → reshape → (seq, batch, heads, d_k)
         let x_rope = x
-            .transpose(0, 1)?                          // (seq, batch, d_model)
+            .transpose(0, 1)? // (seq, batch, d_model)
             .reshape((t, b, self.n_heads, self.d_k))?; // (seq, batch, heads, d_k)
 
         let (q_rope, k_rope) = apply_rotary_pos_emb(&x_rope, &x_rope, cos_emb, sin_emb)?;
@@ -198,24 +216,30 @@ impl RotaryMHSA {
         // Обратно: (seq, batch, heads, d_k) → (batch, seq, d_model)
         let q_in = q_rope
             .reshape((t, b, self.n_heads * self.d_k))?
-            .transpose(0, 1)?;  // (batch, seq, d_model)
+            .transpose(0, 1)?; // (batch, seq, d_model)
         let k_in = k_rope
             .reshape((t, b, self.n_heads * self.d_k))?
-            .transpose(0, 1)?;  // (batch, seq, d_model)
+            .transpose(0, 1)?; // (batch, seq, d_model)
         let v_in = x_rope
             .reshape((t, b, self.n_heads * self.d_k))?
-            .transpose(0, 1)?;  // (batch, seq, d_model)
+            .transpose(0, 1)?; // (batch, seq, d_model)
 
         // 2. Проекция через линейные слои.
-        let q = self.linear_q.forward(&q_in)?  // (batch, seq, d_model)
+        let q = self
+            .linear_q
+            .forward(&q_in)? // (batch, seq, d_model)
             .reshape((b, t, self.n_heads, self.d_k))?
-            .transpose(1, 2)?                 // (batch, heads, seq, d_k)
+            .transpose(1, 2)? // (batch, heads, seq, d_k)
             .contiguous()?;
-        let k = self.linear_k.forward(&k_in)?
+        let k = self
+            .linear_k
+            .forward(&k_in)?
             .reshape((b, t, self.n_heads, self.d_k))?
             .transpose(1, 2)?
             .contiguous()?;
-        let v = self.linear_v.forward(&v_in)?
+        let v = self
+            .linear_v
+            .forward(&v_in)?
             .reshape((b, t, self.n_heads, self.d_k))?
             .transpose(1, 2)?
             .contiguous()?;
@@ -230,8 +254,8 @@ impl RotaryMHSA {
             // mask: (batch, seq, seq) → (batch, 1, seq, seq)
             let mask = mask.unsqueeze(1)?;
             // Маскированные позиции заполняем -10000.
-            let fill_val = Tensor::new(-10_000f32, scores.device())?
-                .broadcast_as(scores.shape())?;
+            let fill_val =
+                Tensor::new(-10_000f32, scores.device())?.broadcast_as(scores.shape())?;
             scores = mask.where_cond(&fill_val, &scores)?;
         }
 
@@ -243,9 +267,9 @@ impl RotaryMHSA {
             let attn = mask.where_cond(&zeros, &attn)?;
 
             // 4. Weighted sum и выходная проекция.
-            let context = attn.matmul(&v)?;  // (batch, heads, seq, d_k)
+            let context = attn.matmul(&v)?; // (batch, heads, seq, d_k)
             let context = context
-                .transpose(1, 2)?              // (batch, seq, heads, d_k)
+                .transpose(1, 2)? // (batch, seq, heads, d_k)
                 .reshape((b, t, self.n_heads * self.d_k))?;
             return self.linear_out.forward(&context);
         }
@@ -302,21 +326,50 @@ impl ConformerConvolution {
         let padding = (kernel_size - 1) / 2;
 
         // Pointwise conv1: (d_model → 2*d_model, kernel=1) для GLU
-        let pw1_cfg = Conv1dConfig { padding: 0, stride: 1, dilation: 1, groups: 1 };
-        let pointwise_conv1 = candle_nn::conv1d(d_model, d_model * 2, 1, pw1_cfg, vb.pp("pointwise_conv1"))?;
+        let pw1_cfg = Conv1dConfig {
+            padding: 0,
+            stride: 1,
+            dilation: 1,
+            groups: 1,
+        };
+        let pointwise_conv1 =
+            candle_nn::conv1d(d_model, d_model * 2, 1, pw1_cfg, vb.pp("pointwise_conv1"))?;
 
         // Depthwise conv: (d_model → d_model, kernel=kernel_size, groups=d_model)
-        let dw_cfg = Conv1dConfig { padding, stride: 1, dilation: 1, groups: d_model };
-        let depthwise_conv = candle_nn::conv1d(d_model, d_model, kernel_size, dw_cfg, vb.pp("depthwise_conv"))?;
+        let dw_cfg = Conv1dConfig {
+            padding,
+            stride: 1,
+            dilation: 1,
+            groups: d_model,
+        };
+        let depthwise_conv = candle_nn::conv1d(
+            d_model,
+            d_model,
+            kernel_size,
+            dw_cfg,
+            vb.pp("depthwise_conv"),
+        )?;
 
         // LayerNorm (ключ "batch_norm" для совместимости с PyTorch)
         let norm = candle_nn::layer_norm(d_model, 1e-5, vb.pp("batch_norm"))?;
 
         // Pointwise conv2: (d_model → d_model, kernel=1)
-        let pw2_cfg = Conv1dConfig { padding: 0, stride: 1, dilation: 1, groups: 1 };
-        let pointwise_conv2 = candle_nn::conv1d(d_model, d_model, 1, pw2_cfg, vb.pp("pointwise_conv2"))?;
+        let pw2_cfg = Conv1dConfig {
+            padding: 0,
+            stride: 1,
+            dilation: 1,
+            groups: 1,
+        };
+        let pointwise_conv2 =
+            candle_nn::conv1d(d_model, d_model, 1, pw2_cfg, vb.pp("pointwise_conv2"))?;
 
-        Ok(Self { pointwise_conv1, depthwise_conv, norm, pointwise_conv2, d_model })
+        Ok(Self {
+            pointwise_conv1,
+            depthwise_conv,
+            norm,
+            pointwise_conv2,
+            d_model,
+        })
     }
 
     /// Прямой проход: x (batch, seq, d_model) → (batch, seq, d_model).
@@ -338,9 +391,9 @@ impl ConformerConvolution {
         let h = self.depthwise_conv.forward(&h)?;
 
         // LayerNorm: нужно транспонировать в (batch, seq, d_model)
-        let h = h.transpose(1, 2)?;     // (batch, seq, d_model)
+        let h = h.transpose(1, 2)?; // (batch, seq, d_model)
         let h = self.norm.forward(&h)?;
-        let h = h.transpose(1, 2)?;     // обратно (batch, d_model, seq)
+        let h = h.transpose(1, 2)?; // обратно (batch, d_model, seq)
 
         // SiLU
         let h = candle_nn::Activation::Silu.forward(&h)?;
@@ -390,10 +443,14 @@ impl ConformerLayer {
         let norm_out = candle_nn::layer_norm(d_model, 1e-5, vb.pp("norm_out"))?;
 
         Ok(Self {
-            norm_feed_forward1, feed_forward1,
-            norm_self_att, self_attn,
-            norm_conv, conv,
-            norm_feed_forward2, feed_forward2,
+            norm_feed_forward1,
+            feed_forward1,
+            norm_self_att,
+            self_attn,
+            norm_conv,
+            conv,
+            norm_feed_forward2,
+            feed_forward2,
             norm_out,
         })
     }
@@ -531,10 +588,7 @@ impl ConformerEncoder {
                 t,
             );
             let (cos, sin) = create_rope_table(self.d_k, t, x.device())?;
-            (
-                cos.to_dtype(x.dtype())?,
-                sin.to_dtype(x.dtype())?,
-            )
+            (cos.to_dtype(x.dtype())?, sin.to_dtype(x.dtype())?)
         };
 
         // 3. Прогоняем через все слои Conformer.

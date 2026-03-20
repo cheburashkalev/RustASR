@@ -72,48 +72,49 @@ pub fn metal_probe(device: &Device) -> AsrResult<()> {
 
     // 1. Тест compute: создать тензоры из данных, matmul, readback.
     //    Tensor::from_vec использует newBufferWithBytes (безопасная копия).
-    let a = Tensor::from_vec(vec![1.0f32; 64], (8, 8), device).map_err(|e| {
-        AsrError::Device(format!("Metal probe: не удалось создать тензор A: {e}"))
-    })?;
-    let b = Tensor::from_vec(vec![1.0f32; 64], (8, 8), device).map_err(|e| {
-        AsrError::Device(format!("Metal probe: не удалось создать тензор B: {e}"))
-    })?;
-    let c = a.matmul(&b).map_err(|e| {
-        AsrError::Device(format!("Metal probe: matmul failed: {e}"))
-    })?;
+    let a = Tensor::from_vec(vec![1.0f32; 64], (8, 8), device)
+        .map_err(|e| AsrError::Device(format!("Metal probe: не удалось создать тензор A: {e}")))?;
+    let b = Tensor::from_vec(vec![1.0f32; 64], (8, 8), device)
+        .map_err(|e| AsrError::Device(format!("Metal probe: не удалось создать тензор B: {e}")))?;
+    let c = a
+        .matmul(&b)
+        .map_err(|e| AsrError::Device(format!("Metal probe: matmul failed: {e}")))?;
     // Синхронизация + readback: тестирует blit encoder (copy_from_buffer).
     device.synchronize().map_err(|e| {
         AsrError::Device(format!("Metal probe: synchronize after matmul failed: {e}"))
     })?;
-    let _data: Vec<Vec<f32>> = c.to_vec2().map_err(|e| {
-        AsrError::Device(format!("Metal probe: readback (matmul) failed: {e}"))
-    })?;
+    let _data: Vec<Vec<f32>> = c
+        .to_vec2()
+        .map_err(|e| AsrError::Device(format!("Metal probe: readback (matmul) failed: {e}")))?;
 
     // 2. Тест allocate_zeros: Tensor::zeros использует blit fill_buffer —
     //    именно эта операция вызывает краш на уязвимых драйверах.
-    let z = Tensor::zeros((8, 8), DType::F32, device).map_err(|e| {
-        AsrError::Device(format!("Metal probe: Tensor::zeros failed: {e}"))
-    })?;
+    let z = Tensor::zeros((8, 8), DType::F32, device)
+        .map_err(|e| AsrError::Device(format!("Metal probe: Tensor::zeros failed: {e}")))?;
     device.synchronize().map_err(|e| {
         AsrError::Device(format!("Metal probe: synchronize after zeros failed: {e}"))
     })?;
-    let _zdata: Vec<Vec<f32>> = z.to_vec2().map_err(|e| {
-        AsrError::Device(format!("Metal probe: readback (zeros) failed: {e}"))
-    })?;
+    let _zdata: Vec<Vec<f32>> = z
+        .to_vec2()
+        .map_err(|e| AsrError::Device(format!("Metal probe: readback (zeros) failed: {e}")))?;
 
     // 3. Тест Conv1d-подобных операций: линейное преобразование.
     //    GigaAM активно использует Conv1d, проверяем аналогичные паттерны.
     let x = Tensor::from_vec(vec![0.5f32; 768], (1, 768), device).map_err(|e| {
-        AsrError::Device(format!("Metal probe: не удалось создать тензор для linear test: {e}"))
+        AsrError::Device(format!(
+            "Metal probe: не удалось создать тензор для linear test: {e}"
+        ))
     })?;
     let w = Tensor::from_vec(vec![0.1f32; 768 * 768], (768, 768), device).map_err(|e| {
         AsrError::Device(format!("Metal probe: не удалось создать тензор весов: {e}"))
     })?;
-    let y = x.matmul(&w.t()?).map_err(|e| {
-        AsrError::Device(format!("Metal probe: large matmul failed: {e}"))
-    })?;
+    let y = x
+        .matmul(&w.t()?)
+        .map_err(|e| AsrError::Device(format!("Metal probe: large matmul failed: {e}")))?;
     device.synchronize().map_err(|e| {
-        AsrError::Device(format!("Metal probe: synchronize after large matmul failed: {e}"))
+        AsrError::Device(format!(
+            "Metal probe: synchronize after large matmul failed: {e}"
+        ))
     })?;
     let _ydata: Vec<Vec<f32>> = y.to_vec2().map_err(|e| {
         AsrError::Device(format!("Metal probe: readback (large matmul) failed: {e}"))
@@ -137,9 +138,9 @@ pub fn metal_probe(device: &Device) -> AsrResult<()> {
 #[inline]
 pub fn metal_sync(device: &Device) -> AsrResult<()> {
     if device.is_metal() {
-        device.synchronize().map_err(|e| {
-            AsrError::Device(format!("Metal sync failed: {e}"))
-        })?;
+        device
+            .synchronize()
+            .map_err(|e| AsrError::Device(format!("Metal sync failed: {e}")))?;
     }
     Ok(())
 }

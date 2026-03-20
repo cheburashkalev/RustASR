@@ -12,7 +12,7 @@
 //!       - Если skip == 0: остаёмся на фрейме (до max_symbols_per_step)
 //!       - Если skip > 0: advance на skip фреймов
 
-use candle_core::{IndexOp, Result, Tensor, D};
+use candle_core::{D, IndexOp, Result, Tensor};
 use tracing::debug;
 
 use crate::config::TdtConfig;
@@ -71,12 +71,8 @@ impl TdtGreedyDecoder {
             let (token_logits, dur_logits) = joint.forward(&enc_frame, &pred_out)?;
 
             // Argmax для токена и длительности
-            let k = token_logits
-                .argmax(D::Minus1)?
-                .to_scalar::<u32>()?;
-            let dur_idx = dur_logits
-                .argmax(D::Minus1)?
-                .to_scalar::<u32>()? as usize;
+            let k = token_logits.argmax(D::Minus1)?.to_scalar::<u32>()?;
+            let dur_idx = dur_logits.argmax(D::Minus1)?.to_scalar::<u32>()? as usize;
 
             // Debug: показать первые 5 шагов
             if step_count < 5 {
@@ -84,12 +80,22 @@ impl TdtGreedyDecoder {
                 let blank_score = token_logits.i(self.blank_idx)?.to_scalar::<f32>()?;
                 // Top-5 tokens
                 let logits_vec: Vec<f32> = token_logits.to_vec1()?;
-                let mut indexed: Vec<(usize, f32)> = logits_vec.iter().copied().enumerate().collect();
+                let mut indexed: Vec<(usize, f32)> =
+                    logits_vec.iter().copied().enumerate().collect();
                 indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-                let top5: Vec<String> = indexed[..5].iter().map(|(i, v)| format!("{}:{:.3}", i, v)).collect();
+                let top5: Vec<String> = indexed[..5]
+                    .iter()
+                    .map(|(i, v)| format!("{}:{:.3}", i, v))
+                    .collect();
                 debug!(
                     "TDT step {}: t={}/{}, k={}, dur_idx={}, blank={:.3}, top=[{}]",
-                    step_count, time_idx, t_total, k, dur_idx, blank_score, top5.join(", ")
+                    step_count,
+                    time_idx,
+                    t_total,
+                    k,
+                    dur_idx,
+                    blank_score,
+                    top5.join(", ")
                 );
             }
             step_count += 1;
@@ -114,10 +120,8 @@ impl TdtGreedyDecoder {
                     // Остаёмся на том же фрейме, можем выдать ещё символы
                     let mut symbols_added = 1;
                     while symbols_added < self.max_symbols_per_step {
-                        let (pred_out2, state_next2) =
-                            prediction_net.step(last_token, &state)?;
-                        let (token_logits2, dur_logits2) =
-                            joint.forward(&enc_frame, &pred_out2)?;
+                        let (pred_out2, state_next2) = prediction_net.step(last_token, &state)?;
+                        let (token_logits2, dur_logits2) = joint.forward(&enc_frame, &pred_out2)?;
 
                         let k2 = token_logits2.argmax(D::Minus1)?.to_scalar::<u32>()?;
                         let dur_idx2 = dur_logits2.argmax(D::Minus1)?.to_scalar::<u32>()? as usize;

@@ -81,7 +81,10 @@ impl Qwen3AsrModel {
             .unwrap_or("qwen3-asr")
             .to_string();
 
-        info!("Qwen3-ASR загружена: {}, квантизация: {}", model_name, quantization);
+        info!(
+            "Qwen3-ASR загружена: {}, квантизация: {}",
+            model_name, quantization
+        );
 
         Ok(Self {
             pipeline,
@@ -93,9 +96,8 @@ impl Qwen3AsrModel {
 
     /// Определить тип квантизации по файлам в директории.
     fn detect_quantization(model_dir: &Path, decoder_weights: DecoderWeights) -> QuantizationType {
-        match decoder_weights {
-            DecoderWeights::Safetensors => return QuantizationType::None,
-            _ => {}
+        if decoder_weights == DecoderWeights::Safetensors {
+            return QuantizationType::None;
         }
 
         // Проверяем наличие GGUF-файлов
@@ -106,7 +108,8 @@ impl Qwen3AsrModel {
                 if name.ends_with(".gguf") {
                     if name.contains("q4") || name.contains("Q4") {
                         return QuantizationType::GgufQ4_0;
-                    } else if name.contains("q6k") || name.contains("Q6K") || name.contains("q6_k") {
+                    } else if name.contains("q6k") || name.contains("Q6K") || name.contains("q6_k")
+                    {
                         return QuantizationType::GgufQ6K;
                     } else if name.contains("q8") || name.contains("Q8") {
                         return QuantizationType::GgufQ8_0;
@@ -144,8 +147,8 @@ impl AsrModel for Qwen3AsrModel {
     fn supported_languages(&self) -> &[&str] {
         // Qwen3-ASR: мультиязычная (основные)
         &[
-            "en", "ru", "zh", "de", "fr", "es", "it", "ja", "ko", "pt",
-            "nl", "pl", "ar", "hi", "th", "vi", "tr", "id", "ms", "sv",
+            "en", "ru", "zh", "de", "fr", "es", "it", "ja", "ko", "pt", "nl", "pl", "ar", "hi",
+            "th", "vi", "tr", "id", "ms", "sv",
         ]
     }
 

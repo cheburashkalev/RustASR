@@ -67,16 +67,19 @@ impl CtcGreedyDecoder {
             ))
         })?;
 
-        let raw: HashMap<String, String> = serde_json::from_str(&data).map_err(|e| {
-            asr_core::AsrError::Model(format!("Ошибка парсинга vocab.json: {e}"))
-        })?;
+        let raw: HashMap<String, String> = serde_json::from_str(&data)
+            .map_err(|e| asr_core::AsrError::Model(format!("Ошибка парсинга vocab.json: {e}")))?;
 
         let vocab: HashMap<usize, String> = raw
             .into_iter()
             .filter_map(|(k, v)| k.parse::<usize>().ok().map(|id| (id, v)))
             .collect();
 
-        debug!("CTC словарь загружен: {} токенов, blank_id={}", vocab.len(), blank_id);
+        debug!(
+            "CTC словарь загружен: {} токенов, blank_id={}",
+            vocab.len(),
+            blank_id
+        );
 
         Ok(Self { vocab, blank_id })
     }
@@ -94,7 +97,9 @@ impl CtcGreedyDecoder {
         let mut prev_token = self.blank_id as u32;
 
         for &tok in &token_ids {
-            if tok != self.blank_id as u32 && (tok != prev_token || prev_token == self.blank_id as u32) {
+            if tok != self.blank_id as u32
+                && (tok != prev_token || prev_token == self.blank_id as u32)
+            {
                 decoded_ids.push(tok as usize);
             }
             prev_token = tok;

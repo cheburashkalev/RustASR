@@ -91,8 +91,16 @@ impl JointNetwork {
     /// Поддерживает как 1D [D], так и 2D [1, D] входы.
     pub fn forward(&self, enc_out: &Tensor, pred_out: &Tensor) -> Result<(Tensor, Tensor)> {
         // Гарантируем 2D вход для candle_nn::Linear
-        let enc_in = if enc_out.dims().len() == 1 { enc_out.unsqueeze(0)? } else { enc_out.clone() };
-        let pred_in = if pred_out.dims().len() == 1 { pred_out.unsqueeze(0)? } else { pred_out.clone() };
+        let enc_in = if enc_out.dims().len() == 1 {
+            enc_out.unsqueeze(0)?
+        } else {
+            enc_out.clone()
+        };
+        let pred_in = if pred_out.dims().len() == 1 {
+            pred_out.unsqueeze(0)?
+        } else {
+            pred_out.clone()
+        };
 
         let enc_h = self.enc_proj.forward(&enc_in)?;
         let pred_h = self.pred_proj.forward(&pred_in)?;
@@ -108,7 +116,8 @@ impl JointNetwork {
 
         // Разделить на token logits и duration logits
         let token_logits = logits.narrow(candle_core::D::Minus1, 0, self.num_classes)?;
-        let dur_logits = logits.narrow(candle_core::D::Minus1, self.num_classes, self.num_durations)?;
+        let dur_logits =
+            logits.narrow(candle_core::D::Minus1, self.num_classes, self.num_durations)?;
 
         Ok((token_logits, dur_logits))
     }

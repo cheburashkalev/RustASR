@@ -374,13 +374,27 @@ impl RelPositionMultiHeadAttention {
         let dk = self.d_k;
 
         // Q, K, V проекции: [B, T, D] → [B, H, T, dk]
-        let q = self.linear_q.forward(x)?.reshape((b, t, h, dk))?.permute((0, 2, 1, 3))?;
-        let k = self.linear_k.forward(x)?.reshape((b, t, h, dk))?.permute((0, 2, 1, 3))?;
-        let v = self.linear_v.forward(x)?.reshape((b, t, h, dk))?.permute((0, 2, 1, 3))?;
+        let q = self
+            .linear_q
+            .forward(x)?
+            .reshape((b, t, h, dk))?
+            .permute((0, 2, 1, 3))?;
+        let k = self
+            .linear_k
+            .forward(x)?
+            .reshape((b, t, h, dk))?
+            .permute((0, 2, 1, 3))?;
+        let v = self
+            .linear_v
+            .forward(x)?
+            .reshape((b, t, h, dk))?
+            .permute((0, 2, 1, 3))?;
 
         // Позиционные эмбеддинги: [1, 2T-1, D] → [1, H, 2T-1, dk]
         let pe_len = pos_emb.dim(1)?;
-        let p = self.linear_pos.forward(pos_emb)?
+        let p = self
+            .linear_pos
+            .forward(pos_emb)?
             .reshape((1, pe_len, h, dk))?
             .permute((0, 2, 1, 3))?;
 
@@ -567,7 +581,12 @@ impl ConformerLayer {
             norm_ff1: LayerNorm::load(d, vb.pp("norm_feed_forward1"))?,
             ff1: ConformerFeedForward::load(d, d_ff, vb.pp("feed_forward1"))?,
             norm_attn: LayerNorm::load(d, vb.pp("norm_self_att"))?,
-            self_attn: RelPositionMultiHeadAttention::load(d, config.n_heads, config.d_k, vb.pp("self_attn"))?,
+            self_attn: RelPositionMultiHeadAttention::load(
+                d,
+                config.n_heads,
+                config.d_k,
+                vb.pp("self_attn"),
+            )?,
             norm_conv: LayerNorm::load(d, vb.pp("norm_conv"))?,
             conv: ConformerConvolution::load(d, config.conv_kernel_size, vb.pp("conv"))?,
             norm_ff2: LayerNorm::load(d, vb.pp("norm_feed_forward2"))?,
@@ -584,7 +603,10 @@ impl ConformerLayer {
 
         // 2. Self-Attention
         let residual = &x;
-        let x = (residual + self.self_attn.forward(&self.norm_attn.forward(&x)?, pos_emb)?)?;
+        let x = (residual
+            + self
+                .self_attn
+                .forward(&self.norm_attn.forward(&x)?, pos_emb)?)?;
 
         // 3. Convolution
         let residual = &x;

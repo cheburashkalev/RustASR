@@ -112,7 +112,10 @@ impl WhisperModel {
         quantized: bool,
     ) -> AsrResult<Self> {
         let model_dir = model_dir.as_ref().to_path_buf();
-        info!("Загрузка Whisper из {:?}, quantized={}", model_dir, quantized);
+        info!(
+            "Загрузка Whisper из {:?}, quantized={}",
+            model_dir, quantized
+        );
 
         // 1. Загрузка конфигурации
         let config_path = model_dir.join("config.json");
@@ -137,8 +140,7 @@ impl WhisperModel {
             let gguf_path = Self::find_gguf_file(&model_dir)?;
             info!("Загрузка GGUF весов из {:?}", gguf_path);
             let vb = candle_transformers::quantized_var_builder::VarBuilder::from_gguf(
-                &gguf_path,
-                device,
+                &gguf_path, device,
             )?;
             let whisper = m::quantized_model::Whisper::load(&vb, config.clone())?;
             (InnerModel::Quantized(whisper), QuantizationType::GgufQ8_0)
@@ -146,11 +148,7 @@ impl WhisperModel {
             let safetensors_path = Self::find_safetensors_file(&model_dir)?;
             info!("Загрузка safetensors весов из {:?}", safetensors_path);
             let vb = unsafe {
-                VarBuilder::from_mmaped_safetensors(
-                    &[safetensors_path],
-                    m::DTYPE,
-                    device,
-                )?
+                VarBuilder::from_mmaped_safetensors(&[safetensors_path], m::DTYPE, device)?
             };
             let whisper = m::model::Whisper::load(&vb, config.clone())?;
             (InnerModel::Normal(whisper), QuantizationType::None)
@@ -204,15 +202,13 @@ impl WhisperModel {
                 .or_else(|_| tensors.tensor("mel_80"))
                 .or_else(|_| tensors.tensor("mel_128"))
                 .map_err(|_| {
-                    AsrError::Model(format!("No mel filter tensor found in mel_filters.safetensors"))
+                    AsrError::Model(
+                        "No mel filter tensor found in mel_filters.safetensors".to_string(),
+                    )
                 })?;
 
-            let mel_tensor = Tensor::from_raw_buffer(
-                tensor.data(),
-                DType::F32,
-                tensor.shape(),
-                &Device::Cpu,
-            )?;
+            let mel_tensor =
+                Tensor::from_raw_buffer(tensor.data(), DType::F32, tensor.shape(), &Device::Cpu)?;
             let mel_filters: Vec<f32> = mel_tensor.flatten_all()?.to_vec1()?;
             debug!("Загружено {} mel-фильтров из файла", mel_filters.len());
             return Ok(mel_filters);
@@ -266,8 +262,7 @@ impl WhisperModel {
     fn language_token(&self, language: &str) -> Option<u32> {
         // Whisper использует токены вида <|ru|>, <|en|> и т.д.
         let token_str = format!("<|{language}|>");
-        self.tokenizer
-            .token_to_id(&token_str)
+        self.tokenizer.token_to_id(&token_str)
     }
 
     /// Специальные токены Whisper.
@@ -368,8 +363,7 @@ impl AsrModel for WhisperModel {
         let audio_duration_secs = samples.len() as f64 / self.sample_rate() as f64;
 
         // Специальные токены
-        let (sot, eot, transcribe, translate, no_speech, no_timestamps) =
-            self.special_tokens()?;
+        let (sot, eot, transcribe, translate, no_speech, no_timestamps) = self.special_tokens()?;
 
         // Токен языка
         let language_token = options
@@ -465,8 +459,12 @@ impl AsrModel for WhisperModel {
         }
 
         let inference_time = start.elapsed().as_secs_f64();
-        let mut result =
-            TranscriptionResult::new(all_text, self.model_name.clone(), inference_time, audio_duration_secs);
+        let mut result = TranscriptionResult::new(
+            all_text,
+            self.model_name.clone(),
+            inference_time,
+            audio_duration_secs,
+        );
 
         if !all_segments.is_empty() {
             result = result.with_segments(all_segments);

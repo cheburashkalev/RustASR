@@ -10,8 +10,8 @@
 use std::f32::consts::PI;
 
 use candle_core::{Device, Tensor};
-use rustfft::num_complex::Complex;
 use rustfft::FftPlanner;
+use rustfft::num_complex::Complex;
 
 use asr_core::AsrResult;
 
@@ -54,7 +54,11 @@ impl ParakeetMelExtractor {
 
         // Извлечь mel-фильтры: [1, n_mels, n_fft/2+1] → [n_mels][n_fft/2+1]
         let fb_data = mel_fb.squeeze(0)?.to_vec2::<f32>()?;
-        assert_eq!(fb_data.len(), n_mels, "mel_filters: ожидается {n_mels} бинов");
+        assert_eq!(
+            fb_data.len(),
+            n_mels,
+            "mel_filters: ожидается {n_mels} бинов"
+        );
 
         // Извлечь окно или сгенерировать Hann
         let window = if let Some(w) = window_tensor {
@@ -83,13 +87,8 @@ impl ParakeetMelExtractor {
         let win_length = config.win_length();
         let sample_rate = config.preprocessor.sample_rate;
 
-        let mel_filters = create_slaney_mel_filterbank(
-            n_fft,
-            n_mels,
-            0.0,
-            sample_rate as f32 / 2.0,
-            sample_rate,
-        );
+        let mel_filters =
+            create_slaney_mel_filterbank(n_fft, n_mels, 0.0, sample_rate as f32 / 2.0, sample_rate);
 
         Self {
             mel_filters,
@@ -173,6 +172,7 @@ impl ParakeetMelExtractor {
 
         let mut fft_buffer = vec![Complex::new(0.0f32, 0.0); self.n_fft];
 
+        #[allow(clippy::needless_range_loop)]
         for frame_idx in 0..n_frames {
             let start = frame_idx * self.hop_length;
 
@@ -216,6 +216,7 @@ impl ParakeetMelExtractor {
 
         let mut mel = vec![vec![0.0f32; n_frames]; self.n_mels];
 
+        #[allow(clippy::needless_range_loop)]
         for m in 0..self.n_mels {
             let filter = &self.mel_filters[m];
             let filter_len = filter.len().min(n_fft_bins);

@@ -49,7 +49,7 @@ impl LayerNorm {
         } else {
             self.bias.clone()
         };
-        Ok(x_normed.broadcast_mul(&w)?.broadcast_add(&b)?)
+        x_normed.broadcast_mul(&w)?.broadcast_add(&b)
     }
 }
 

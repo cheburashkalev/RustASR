@@ -3,8 +3,8 @@
 //! Реализует авторегрессивную генерацию текста из аудио-фичей энкодера.
 
 use candle_core::{IndexOp, Tensor};
-use rand::distributions::Distribution;
 use rand::SeedableRng;
+use rand::distributions::Distribution;
 
 /// Результат декодирования одного 30-секундного сегмента.
 #[derive(Debug, Clone)]
@@ -126,8 +126,7 @@ impl WhisperDecoder {
         let mut no_speech_prob = f64::NAN;
 
         for i in 0..sample_len {
-            let tokens_t =
-                Tensor::new(tokens.as_slice(), device)?.unsqueeze(0)?;
+            let tokens_t = Tensor::new(tokens.as_slice(), device)?.unsqueeze(0)?;
             let flush = i == 0;
             let ys = forward_fn(&tokens_t, audio_features, flush)?;
 
@@ -138,15 +137,16 @@ impl WhisperDecoder {
             // На первом шаге проверяем no_speech
             if i == 0 {
                 let logits_no_speech = candle_nn::ops::softmax(&logits, 0)?;
-                no_speech_prob =
-                    logits_no_speech.i(self.no_speech_token as usize)?.to_scalar::<f32>()? as f64;
+                no_speech_prob = logits_no_speech
+                    .i(self.no_speech_token as usize)?
+                    .to_scalar::<f32>()? as f64;
             }
 
             // Подавление запрещённых токенов
             let logits = {
                 let suppress = &self.suppress_tokens;
-                let on_token = Tensor::new(&[f32::NEG_INFINITY], device)?
-                    .broadcast_as(suppress.shape())?;
+                let on_token =
+                    Tensor::new(&[f32::NEG_INFINITY], device)?.broadcast_as(suppress.shape())?;
                 logits.scatter_add(suppress, &on_token, 0)?
             };
 
@@ -169,8 +169,7 @@ impl WhisperDecoder {
             tokens.push(next_token);
         }
 
-        let generated_tokens: Vec<u32> =
-            tokens[initial_tokens_len..].to_vec();
+        let generated_tokens: Vec<u32> = tokens[initial_tokens_len..].to_vec();
         let n_generated = generated_tokens.len().max(1);
         let avg_logprob = sum_logprob / n_generated as f64;
         let compression_ratio = Self::compression_ratio(&generated_tokens);
@@ -226,8 +225,8 @@ impl WhisperDecoder {
         let probs = candle_nn::ops::softmax(&logits, 0)?;
         let probs_vec: Vec<f32> = probs.to_vec1()?;
 
-        let distr =
-            rand::distributions::WeightedIndex::new(&probs_vec).map_err(candle_core::Error::wrap)?;
+        let distr = rand::distributions::WeightedIndex::new(&probs_vec)
+            .map_err(candle_core::Error::wrap)?;
         let next_token = distr.sample(&mut self.rng) as u32;
         Ok(next_token)
     }
@@ -237,10 +236,7 @@ impl WhisperDecoder {
         if tokens.is_empty() {
             return 0.0;
         }
-        let text_bytes: Vec<u8> = tokens
-            .iter()
-            .flat_map(|t| t.to_le_bytes())
-            .collect();
+        let text_bytes: Vec<u8> = tokens.iter().flat_map(|t| t.to_le_bytes()).collect();
         let _original_len = text_bytes.len();
 
         // Простая эвристика: считаем уникальные n-граммы

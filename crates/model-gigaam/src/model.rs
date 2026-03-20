@@ -10,9 +10,8 @@ use candle_nn::VarBuilder;
 use tracing::{debug, info};
 
 use asr_core::{
-    AsrError, AsrModel, AsrResult, ModelInfo, ModelType, QuantizationType,
-    Segment, TranscribeOptions, TranscriptionResult,
-    metal_utils,
+    AsrError, AsrModel, AsrResult, ModelInfo, ModelType, QuantizationType, Segment,
+    TranscribeOptions, TranscriptionResult, metal_utils,
 };
 
 use crate::config::GigaAmConfig;
@@ -75,25 +74,20 @@ impl GigaAmModel {
         // Определить dtype: f16 на GPU, f32 на CPU
         // Metal не поддерживает conv1d в F16, используем F32.
         // CUDA может работать в F16/BF16.
-        let dtype = if device.is_cuda() { DType::BF16 } else { DType::F32 };
-        let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(
-                &[safetensors_path],
-                dtype,
-                device,
-            )?
+        let dtype = if device.is_cuda() {
+            DType::BF16
+        } else {
+            DType::F32
         };
+        let vb =
+            unsafe { VarBuilder::from_mmaped_safetensors(&[safetensors_path], dtype, device)? };
 
         // 3. Создать энкодер
         let encoder = ConformerEncoder::load(&config.encoder, vb.pp("encoder"))?;
         debug!("GigaAM: энкодер загружен");
 
         // 4. Создать CTC-голову
-        let head = CtcHead::load(
-            config.head.feat_in,
-            config.head.num_classes,
-            vb.pp("head"),
-        )?;
+        let head = CtcHead::load(config.head.feat_in, config.head.num_classes, vb.pp("head"))?;
         debug!("GigaAM: CTC-голова загружена");
 
         // 5. Создать CTC-декодер (загрузить словарь)
@@ -107,7 +101,10 @@ impl GigaAmModel {
         }
         let blank_id = config.head.num_classes - 1;
         let decoder = CtcGreedyDecoder::from_vocab_file(&vocab_path, blank_id)?;
-        debug!("GigaAM: CTC-декодер загружен (vocab_size={})", decoder.vocab_size());
+        debug!(
+            "GigaAM: CTC-декодер загружен (vocab_size={})",
+            decoder.vocab_size()
+        );
 
         // 6. Создать mel-экстрактор
         let mel_extractor = GigaAmMelExtractor::new(config.preprocessor.clone());
@@ -162,7 +159,7 @@ impl AsrModel for GigaAmModel {
         ModelInfo {
             model_type: ModelType::GigaAm,
             display_name: format!("GigaAM {}", self.config.model_name),
-            parameters: Some(220_000_000), // ~220M параметров
+            parameters: Some(220_000_000),         // ~220M параметров
             weights_size_bytes: Some(442_000_000), // ~442MB (f16)
             quantization: QuantizationType::None,
             languages: vec!["ru".to_string()],

@@ -173,9 +173,9 @@ impl AsrPipeline {
 
         // Load configurations
         let aut_config =
-            AuTConfig::from_hf_config(&config_path).map_err(|e| candle_core::Error::Msg(e))?;
+            AuTConfig::from_hf_config(&config_path).map_err(candle_core::Error::Msg)?;
         let qwen3_config =
-            Qwen3Config::from_hf_config(&config_path).map_err(|e| candle_core::Error::Msg(e))?;
+            Qwen3Config::from_hf_config(&config_path).map_err(candle_core::Error::Msg)?;
 
         // Create Mel extractor with mel filters loaded from file (for exact Python match)
         let mel_config = FeatureExtractorConfig::default();

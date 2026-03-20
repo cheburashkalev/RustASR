@@ -12,7 +12,7 @@
 use std::f32::consts::PI;
 
 use candle_core::{Device, Result, Tensor};
-use rustfft::{num_complex::Complex, FftPlanner};
+use rustfft::{FftPlanner, num_complex::Complex};
 
 use crate::config::PreprocessorConfig;
 
@@ -36,7 +36,11 @@ impl GigaAmMelExtractor {
             config.sample_rate as f32 / 2.0,
             config.sample_rate,
         );
-        Self { config, window, filterbank }
+        Self {
+            config,
+            window,
+            filterbank,
+        }
     }
 
     /// Извлечь mel-спектрограмму для подачи в Conformer.
@@ -140,9 +144,7 @@ impl GigaAmMelExtractor {
     fn log_mel(&self, mel_spec: &[Vec<f32>]) -> Vec<Vec<f32>> {
         mel_spec
             .iter()
-            .map(|frame| {
-                frame.iter().map(|&x| x.clamp(1e-9, 1e9).ln()).collect()
-            })
+            .map(|frame| frame.iter().map(|&x| x.clamp(1e-9, 1e9).ln()).collect())
             .collect()
     }
 
@@ -246,8 +248,8 @@ mod tests {
     #[test]
     fn test_mel_filterbank_shape() {
         let fb = create_htk_mel_filterbank(161, 64, 0.0, 8000.0, 16000);
-        assert_eq!(fb.len(), 161);        // n_freqs
-        assert_eq!(fb[0].len(), 64);      // n_mels
+        assert_eq!(fb.len(), 161); // n_freqs
+        assert_eq!(fb[0].len(), 64); // n_mels
     }
 
     #[test]

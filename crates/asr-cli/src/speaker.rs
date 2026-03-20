@@ -78,20 +78,17 @@ pub fn cluster_segments_mel_kmeans(
     Ok(assign)
 }
 
+/// Количество mel-бинов из конфигурации экстрактора.
 fn extractor_n_mels(extractor: &MelSpectrogramExtractor) -> usize {
-    // В текущей реализации MelSpectrogramExtractor не экспонирует config,
-    // поэтому используем дефолтный размерность как fallback.
-    // Если сегмент пустой (e<=s) мы всё равно не используем embedding по смыслу.
-    //
-    // Дефолт по FeatureExtractorConfig: 128 mel bins.
-    let _ = extractor;
-    128
+    extractor.n_mels()
 }
 
 fn build_mel_extractor(model_dir: &Path, sample_rate: usize) -> Result<MelSpectrogramExtractor> {
-    let mut cfg = FeatureExtractorConfig::default();
-    cfg.sample_rate = sample_rate;
-    cfg.f_max = (sample_rate as f32) / 2.0;
+    let cfg = FeatureExtractorConfig {
+        sample_rate,
+        f_max: (sample_rate as f32) / 2.0,
+        ..Default::default()
+    };
 
     let mel_filters = model_dir.join("mel_filters.bin");
     if mel_filters.exists() && sample_rate == 16000 {
