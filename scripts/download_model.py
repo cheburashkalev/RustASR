@@ -15,7 +15,7 @@ from pathlib import Path
 try:
     from huggingface_hub import snapshot_download
 except ImportError:
-    print("❌ Необходимо установить huggingface_hub:")
+    print("Ошибка: необходимо установить huggingface_hub:")
     print("   pip install huggingface_hub")
     exit(1)
 
@@ -45,8 +45,8 @@ def main():
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"📥 Скачивание модели: {args.model}")
-    print(f"📁 Директория: {output_dir}")
+    print(f"Скачивание модели: {args.model}")
+    print(f"Директория: {output_dir}")
     print()
 
     # Скачиваем модель
@@ -59,10 +59,10 @@ def main():
     )
 
     print()
-    print(f"✅ Модель скачана в: {output_dir}")
+    print(f"Модель скачана в: {output_dir}")
 
     # Список файлов
-    print("\n📄 Файлы модели:")
+    print("\nФайлы модели:")
     for f in sorted(output_dir.rglob("*")):
         if f.is_file():
             size_mb = f.stat().st_size / (1024 * 1024)

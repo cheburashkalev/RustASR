@@ -21,6 +21,7 @@ model-whisper = { path = "../model-whisper" }
 model-gigaam = { path = "../model-gigaam" }
 model-parakeet = { path = "../model-parakeet" }
 candle-core.workspace = true
+cudarc.workspace = true
 tokenizers.workspace = true
 clap.workspace = true
 indicatif.workspace = true

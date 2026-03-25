@@ -28,10 +28,7 @@ impl Resampler {
         }
 
         let ratio = self.target_sample_rate as f64 / buffer.sample_rate as f64;
-
-        // Calculate chunk sizes for FftFixedInOut
         let chunk_size = 1024;
-        let output_chunk_size = (chunk_size as f64 * ratio).ceil() as usize;
 
         let mut resampler = FftFixedInOut::<f32>::new(
             buffer.sample_rate,
@@ -41,32 +38,31 @@ impl Resampler {
         )
         .map_err(|e| AsrError::Audio(format!("Failed to create resampler: {}", e)))?;
 
-        let mut output = Vec::with_capacity((buffer.samples.len() as f64 * ratio) as usize);
+        let mut output = Vec::with_capacity((buffer.samples.len() as f64 * ratio).ceil() as usize);
 
-        // Process in chunks
+        // Обрабатываем только полные блоки, которые требуются на текущем шаге.
         let mut pos = 0;
-        while pos + chunk_size <= buffer.samples.len() {
-            let input_chunk = vec![buffer.samples[pos..pos + chunk_size].to_vec()];
+        while pos < buffer.samples.len() {
+            let frames_in = resampler.input_frames_next();
+            if pos + frames_in > buffer.samples.len() {
+                break;
+            }
+
+            let input_chunk = vec![buffer.samples[pos..pos + frames_in].to_vec()];
             let output_chunk = resampler
                 .process(&input_chunk, None)
                 .map_err(|e| AsrError::Audio(format!("Resampling failed: {}", e)))?;
             output.extend_from_slice(&output_chunk[0]);
-            pos += chunk_size;
+            pos += frames_in;
         }
 
-        // Handle remaining samples (pad with zeros if needed)
+        // Хвост отправляем через process_partial, чтобы rubato сам сделал корректный zero-padding.
         if pos < buffer.samples.len() {
-            let mut remaining = buffer.samples[pos..].to_vec();
-            remaining.resize(chunk_size, 0.0);
-            let input_chunk = vec![remaining];
+            let input_chunk = vec![buffer.samples[pos..].to_vec()];
             let output_chunk = resampler
-                .process(&input_chunk, None)
+                .process_partial(Some(&input_chunk), None)
                 .map_err(|e| AsrError::Audio(format!("Resampling failed: {}", e)))?;
-
-            // Only take the proportional amount of output
-            let remaining_ratio = (buffer.samples.len() - pos) as f64 / chunk_size as f64;
-            let take = (output_chunk_size as f64 * remaining_ratio) as usize;
-            output.extend_from_slice(&output_chunk[0][..take.min(output_chunk[0].len())]);
+            output.extend_from_slice(&output_chunk[0]);
         }
 
         Ok(AudioBuffer::new(output, self.target_sample_rate, 1))
@@ -91,5 +87,16 @@ mod tests {
 
         assert_eq!(result.sample_rate, 16000);
         assert_eq!(result.samples.len(), buffer.samples.len());
+    }
+
+    #[test]
+    fn test_resampler_48k_to_16k_irregular_len() {
+        let input_len = 48_000 + 137;
+        let buffer = AudioBuffer::new(vec![0.0; input_len], 48_000, 1);
+        let resampler = Resampler::new(16_000);
+        let result = resampler.resample(&buffer).unwrap();
+
+        assert_eq!(result.sample_rate, 16_000);
+        assert!(!result.samples.is_empty());
     }
 }
